@@ -112,7 +112,7 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 	protected int visibleTextStart, visibleTextEnd;
 	private int maxLength;
 	private String[] autocompleteOptions;
-	private Input.OnscreenKeyboardType keyboardType = Input.OnscreenKeyboardType.Default;
+	private OnscreenKeyboardType keyboardType = OnscreenKeyboardType.Default;
 	private boolean preventAutoCorrection;
 
 	boolean focused;
@@ -491,7 +491,10 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 	void cut (boolean fireChangeEvent) {
 		if (hasSelection && !passwordMode) {
 			copy();
+			String oldText = text;
+			int oldCursor = cursor;
 			cursor = delete(fireChangeEvent);
+			if (text.equals(oldText)) cursor = oldCursor; // Change cancelled.
 			updateDisplayText();
 		}
 	}
@@ -514,13 +517,19 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 		}
 		content = buffer.toString();
 
+		String oldText = text;
+		int oldCursor = cursor;
 		if (hasSelection) cursor = delete(fireChangeEvent);
+		String textAfterDelete = text;
 		if (fireChangeEvent)
 			changeText(text, insert(cursor, content, text));
 		else
 			text = insert(cursor, content, text);
 		updateDisplayText();
-		cursor += content.length();
+		if (!text.equals(textAfterDelete)) // Insert succeeded.
+			cursor += content.length();
+		else if (text.equals(oldText)) // Change cancelled.
+			cursor = oldCursor;
 	}
 
 	String insert (int position, CharSequence text, String to) {
@@ -541,6 +550,31 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 			text = newText;
 		clearSelection();
 		return minIndex;
+	}
+
+	/** Restores the previous text state. */
+	public void undo () {
+		undo(programmaticChangeEvents);
+	}
+
+	/** Restores the previous text state.
+	 * @param fireChangeEvent If true, a {@link ChangeEvent} will be fired. */
+	void undo (boolean fireChangeEvent) {
+		if (undoText.equals(text)) return;
+		String oldText = text;
+		int oldCursor = cursor;
+		if (fireChangeEvent) {
+			if (changeText(oldText, undoText)) {
+				undoText = oldText;
+				updateDisplayText();
+			}
+		} else {
+			text = undoText;
+			undoText = oldText;
+			updateDisplayText();
+		}
+		cursor = text.equals(oldText) ? oldCursor : Math.min(cursor, text.length());
+		clearSelection();
 	}
 
 	/** Sets the {@link Stage#setKeyboardFocus(Actor) keyboard focus} to the next TextField. If no next text field is found, the
@@ -897,13 +931,13 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 		private void openNativeInputField (TextField textField) {
 			NativeInputConfiguration configuration = new NativeInputConfiguration();
 			// If we are in password mode, assume that the user want to show password keyboard
-			Input.OnscreenKeyboardType resolvedType = textField.passwordMode
-				&& textField.keyboardType == Input.OnscreenKeyboardType.Default ? Input.OnscreenKeyboardType.Password
-					: textField.keyboardType;
+			OnscreenKeyboardType resolvedType = textField.passwordMode && textField.keyboardType == OnscreenKeyboardType.Default
+				? OnscreenKeyboardType.Password
+				: textField.keyboardType;
 
 			configuration.setType(resolvedType).setMaskInput(textField.passwordMode).setShowUnmaskButton(textField.passwordMode)
 				.setMaxLength(textField.maxLength <= 0 ? -1 : textField.maxLength).setMultiLine(textField.writeEnters)
-				.setPreventCorrection(textField.preventAutoCorrection || resolvedType == Input.OnscreenKeyboardType.Password)
+				.setPreventCorrection(textField.preventAutoCorrection || resolvedType == OnscreenKeyboardType.Password)
 				.setPlaceholder(textField.messageText == null ? "" : textField.messageText)
 				.setAutoComplete(textField.autocompleteOptions);
 
@@ -1047,10 +1081,7 @@ public class TextField extends Widget implements Disableable, Styleable<TextFiel
 					selectAll();
 					return true;
 				case Keys.Z:
-					String oldText = text;
-					setText(undoText);
-					undoText = oldText;
-					updateDisplayText();
+					undo(true);
 					return true;
 				default:
 					handled = false;
