@@ -1341,6 +1341,11 @@ public class PolygonSpriteBatch implements PolygonBatch {
 	}
 
 	@Override
+	public ShaderProgram getCustomShader () {
+		return customShader;
+	}
+
+	@Override
 	public boolean isBlendingEnabled () {
 		return !blendingDisabled;
 	}

@@ -1,4 +1,5 @@
 [1.14.3]
+- [BREAKING CHANGE] API Addition: Batch#getCustomShader() returns the custom shader or null.
 - API Addition: add() with 5-8 parameters for arrays.
 
 [1.14.2]
